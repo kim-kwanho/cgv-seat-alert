@@ -1,0 +1,17 @@
+{
+  "theater_code": "0199",
+  "theater_keyword": "천호",
+  "theater_name": "CGV 천호",
+  "movie_code": "30001323",
+  "movie_name": "오디세이",
+  "play_date": "20260811",
+  "start_time": "19:30",
+  "poll_interval_sec": 45,
+  "ntfy_topic": "cgv-cheonho-odyssey-1930",
+  "ntfy_server": "https://ntfy.sh",
+  "telegram_bot_token": "",
+  "telegram_chat_id": "",
+  "booking_url": "https://cgv.co.kr/cnm/movieBook",
+  "alert_on_increase_only": true,
+  "cooldown_sec": 120
+}

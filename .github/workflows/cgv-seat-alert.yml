@@ -1,0 +1,57 @@
+name: CGV seat alert
+
+on:
+  schedule:
+    # UTC 기준. KST = UTC+9 → 매 5분
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: cgv-seat-alert
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore previous seat state
+        id: cache-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: state.json
+          key: cgv-state-${{ github.run_id }}
+          restore-keys: |
+            cgv-state-
+
+      - name: Check remaining seats once
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_SERVER: ${{ secrets.NTFY_SERVER }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          ALERT_SOURCE: Actions
+        run: python monitor.py --once
+
+      - name: Save seat state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: state.json
+          key: cgv-state-${{ github.run_id }}
