@@ -50,7 +50,7 @@ jobs:
         run: python monitor.py --once
 
       - name: Save seat state
-        if: always()
+        if: always() && hashFiles('state.json') != ''
         uses: actions/cache/save@v4
         with:
           path: state.json
