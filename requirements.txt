@@ -1,0 +1,2 @@
+# Runtime: Python 3.10+ standard library only.
+# Seat lookup uses `npx daiso` (Node.js 18+ required on PATH).

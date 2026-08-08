@@ -7,7 +7,7 @@
   "play_date": "20260811",
   "start_time": "19:30",
   "poll_interval_sec": 45,
-  "ntfy_topic": "cgv-cheonho-odyssey-1930",
+  "ntfy_topic": "your-ntfy-topic",
   "ntfy_server": "https://ntfy.sh",
   "telegram_bot_token": "",
   "telegram_chat_id": "",

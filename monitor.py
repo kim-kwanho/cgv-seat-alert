@@ -169,6 +169,9 @@ def notify(cfg: dict[str, Any], title: str, body: str) -> None:
     source = (cfg.get("alert_source") or "").strip()
     if source:
         title = f"[{source}] {title}"
+    if cfg.get("_dry_run"):
+        print(f"[{now_kst()}] DRY-RUN (푸시 생략): {title} | {body}")
+        return
     print(f"[{now_kst()}] PUSH: {title} | {body}")
     errors: list[str] = []
     try:
@@ -271,6 +274,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--once", action="store_true", help="한 번만 조회")
     p.add_argument("--test-push", action="store_true", help="테스트 푸시 후 종료")
     p.add_argument("--status-push", action="store_true", help="시작 시 현재 잔여석 푸시")
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="조회·로그만 하고 푸시는 보내지 않음",
+    )
     p.add_argument("--interval", type=int, default=None, help="폴링 초 (config 덮어쓰기)")
     p.add_argument(
         "--any-seat",
@@ -280,13 +288,28 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+def resolve_config_path(path: Path) -> Path:
+    """config.json이 없으면 config.example.json을 안내한다."""
+    if path.exists():
+        return path
+    example = ROOT / "config.example.json"
+    if path == DEFAULT_CONFIG and example.exists():
+        raise FileNotFoundError(
+            f"{path.name} 없음. 먼저 복사하세요: "
+            f"copy config.example.json config.json  (또는 cp config.example.json config.json)"
+        )
+    raise FileNotFoundError(path)
+
+
 def main() -> int:
     args = parse_args()
-    cfg = apply_env_overrides(load_json(args.config))
+    cfg = apply_env_overrides(load_json(resolve_config_path(args.config)))
     if args.interval:
         cfg["poll_interval_sec"] = args.interval
     if args.any_seat:
         cfg["alert_on_increase_only"] = False
+    if args.dry_run:
+        cfg["_dry_run"] = True
 
     if args.test_push:
         notify(
@@ -308,7 +331,10 @@ def main() -> int:
         f"{cfg['play_date']} {cfg['start_time']} | 간격 {cfg['poll_interval_sec']}s"
     )
     print(f"[{now_kst()}] ntfy 토픽: {cfg.get('ntfy_topic')} @ {cfg.get('ntfy_server')}")
-    print(f"[{now_kst()}] 모드: {'잔여석 증가(취소표)' if cfg.get('alert_on_increase_only', True) else '잔여>0'}")
+    mode = "잔여석 증가(취소표)" if cfg.get("alert_on_increase_only", True) else "잔여>0"
+    if cfg.get("_dry_run"):
+        mode = f"{mode} + dry-run"
+    print(f"[{now_kst()}] 모드: {mode}")
 
     try:
         state = once(cfg, state, force_status=args.status_push)

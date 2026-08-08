@@ -18,16 +18,23 @@ CGV 천호 **오디세이** `2026-08-11 19:30` 잔여석을 조회하고, **잔�
 | 일시 | 2026-08-11 19:30 |
 | 알림 | 잔여석 **증가** |
 
+## 요구 사항
+
+- Python **3.10+** (추가 pip 패키지 없음 — `requirements.txt` 참고)
+- Node.js **18+** (`npx daiso` 조회용)
+
 ## ntfy
 
 1. 폰에 [ntfy](https://ntfy.sh) 설치
-2. 토픽 구독: `cgv-cheonho-odyssey-1930` (바꾸면 config/시크릿도 맞출 것)
+2. 토픽 구독 후 `config.json`의 `ntfy_topic`(또는 Actions 시크릿 `NTFY_TOPIC`)에 동일 값 설정
 
 ## 로컬 실행
 
 ```powershell
-cd "C:\Users\Kwanho Kim\Projects\cgv-seat-alert"
-python -u monitor.py --status-push
+cd cgv-seat-alert
+copy config.example.json config.json   # 최초 1회 — 토픽·상영 정보 수정
+python -u monitor.py --dry-run --once  # 조회만 (푸시 없음)
+python -u monitor.py --status-push     # 감시 시작 + 현재 잔여석 푸시
 ```
 
 ## GitHub Actions (무료, 5분)
@@ -46,9 +53,11 @@ python -u monitor.py --status-push
 
 - 기본: 잔여석 **증가**만
 - `--any-seat`: 잔여 > 0 이면 알림
+- `--dry-run`: 조회·로그만, 푸시 안 함
 
 ## 주의
 
 - 조회는 `npx daiso` 중계 API 사용
 - 좌석 맵(좋은 자리)은 판별하지 않음 → 알림 후 CGV에서 직접 선택
 - 로컬+Actions 동시 가동 시 같은 증가에 알림이 두 번 올 수 있음 (`[Actions]` 접두사로 구분)
+- `config.json`은 gitignore — 템플릿은 `config.example.json`

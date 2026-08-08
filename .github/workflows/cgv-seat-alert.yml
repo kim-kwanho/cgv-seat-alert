@@ -31,6 +31,12 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Prepare config
+        run: |
+          if [ ! -f config.json ]; then
+            cp config.example.json config.json
+          fi
+
       - name: Restore previous seat state
         id: cache-restore
         uses: actions/cache/restore@v4
