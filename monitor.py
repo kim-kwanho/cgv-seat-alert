@@ -165,7 +165,13 @@ def apply_env_overrides(cfg: dict[str, Any]) -> dict[str, Any]:
     return cfg
 
 
-def notify(cfg: dict[str, Any], title: str, body: str) -> None:
+def notify(
+    cfg: dict[str, Any],
+    title: str,
+    body: str,
+    *,
+    priority: str = "high",
+) -> None:
     source = (cfg.get("alert_source") or "").strip()
     if source:
         title = f"[{source}] {title}"
@@ -175,7 +181,7 @@ def notify(cfg: dict[str, Any], title: str, body: str) -> None:
     print(f"[{now_kst()}] PUSH: {title} | {body}")
     errors: list[str] = []
     try:
-        send_ntfy_safe(cfg, title, body)
+        send_ntfy_safe(cfg, title, body, priority=priority)
     except Exception as e:  # noqa: BLE001
         errors.append(f"ntfy: {e}")
     try:
@@ -221,6 +227,39 @@ def should_alert(
     return False, "skip"
 
 
+def fail_alert_threshold(cfg: dict[str, Any]) -> int:
+    return max(1, int(cfg.get("fail_alert_threshold", 3)))
+
+
+def record_failure(cfg: dict[str, Any], state: dict[str, Any], error: str) -> dict[str, Any]:
+    """연속 조회 실패를 세고, 임계치마다 푸시한다 (조용히 죽는 경우 방지)."""
+    count = int(state.get("consecutive_failures") or 0) + 1
+    state["consecutive_failures"] = count
+    state["last_error"] = error
+    state["last_check"] = now_kst()
+    threshold = fail_alert_threshold(cfg)
+    print(f"[{now_kst()}] 조회 실패 ({count}회): {error}", file=sys.stderr)
+    if count >= threshold and count % threshold == 0:
+        notify(
+            cfg,
+            "조회 연속 실패",
+            f"{count}회 연속 실패 (임계 {threshold})\n{error}\n"
+            f"{cfg.get('movie_name')} / {cfg.get('theater_name')} "
+            f"{cfg.get('play_date')} {cfg.get('start_time')}",
+            priority="default",
+        )
+        state["last_fail_alert_ts"] = time.time()
+        state["last_fail_alert_count"] = count
+    return state
+
+
+def clear_failures(state: dict[str, Any]) -> None:
+    if state.get("consecutive_failures"):
+        print(f"[{now_kst()}] 조회 복구 (연속 실패 {state['consecutive_failures']}회 해제)")
+    state["consecutive_failures"] = 0
+    state["last_error"] = None
+
+
 def once(cfg: dict[str, Any], state: dict[str, Any], *, force_status: bool = False) -> dict[str, Any]:
     show = fetch_target(cfg)
     if show is None:
@@ -228,11 +267,9 @@ def once(cfg: dict[str, Any], state: dict[str, Any], *, force_status: bool = Fal
             f"상영 정보를 찾지 못함: {cfg['movie_name']} "
             f"{cfg['theater_name']} {cfg['play_date']} {cfg['start_time']}"
         )
-        print(f"[{now_kst()}] {msg}")
-        state["last_error"] = msg
-        state["last_check"] = now_kst()
-        return state
+        return record_failure(cfg, state, msg)
 
+    clear_failures(state)
     curr = int(show.get("remainingSeats") or 0)
     total = int(show.get("totalSeats") or 0)
     prev = state.get("remaining_seats")
@@ -266,7 +303,6 @@ def once(cfg: dict[str, Any], state: dict[str, Any], *, force_status: bool = Fal
         }
     )
     return state
-
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="CGV 취소표(잔여석 증가) 감지 푸시")
@@ -340,7 +376,8 @@ def main() -> int:
         state = once(cfg, state, force_status=args.status_push)
         save_json(STATE_FILE, state)
     except Exception as e:  # noqa: BLE001
-        print(f"[{now_kst()}] 초기 조회 실패: {e}", file=sys.stderr)
+        state = record_failure(cfg, state, str(e))
+        save_json(STATE_FILE, state)
         if args.once:
             return 1
 
@@ -354,9 +391,11 @@ def main() -> int:
             state = once(cfg, state)
             save_json(STATE_FILE, state)
         except urllib.error.HTTPError as e:
-            print(f"[{now_kst()}] HTTP {e.code}: {e}", file=sys.stderr)
+            state = record_failure(cfg, state, f"HTTP {e.code}: {e}")
+            save_json(STATE_FILE, state)
         except Exception as e:  # noqa: BLE001
-            print(f"[{now_kst()}] 조회 오류: {e}", file=sys.stderr)
+            state = record_failure(cfg, state, str(e))
+            save_json(STATE_FILE, state)
 
 
 if __name__ == "__main__":

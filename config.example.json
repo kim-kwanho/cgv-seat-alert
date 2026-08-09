@@ -13,5 +13,6 @@
   "telegram_chat_id": "",
   "booking_url": "https://cgv.co.kr/cnm/movieBook",
   "alert_on_increase_only": true,
-  "cooldown_sec": 120
+  "cooldown_sec": 120,
+  "fail_alert_threshold": 3
 }
