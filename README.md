@@ -1,15 +1,17 @@
 # CGV 취소표 감지 푸시
 
-CGV 천호 **오디세이** `2026-08-11 19:30` 잔여석을 조회하고, **잔여석이 늘어나면**(취소표) 푸시합니다. 예매는 하지 않습니다.
+CGV 잔여석을 조회하고, **잔여석이 늘어나면**(취소표) ntfy로 푸시하는 개인용 모니터입니다. 예매는 하지 않습니다.
+
+> **상태 (2026-08-13):** 타겟 상영(오디세이 / CGV 천호 / 2026-08-11 19:30)은 종료됐고, **GitHub Actions 워크플로는 중지**해 두었습니다. 코드·설정은 참고용으로 레포에 남겨 둡니다.
 
 ## 역할 분담
 
 | 경로 | 간격 | 용도 |
 |------|------|------|
-| **로컬** `monitor.py` | 45초 | 집중해서 잡을 때 (본진) |
-| **GitHub Actions** | 5분 | PC 꺼둔 동안 백업 감시 |
+| **로컬** `monitor.py` | 45초 | 집중해서 잡을 때 |
+| **GitHub Actions** | 5분 | PC 꺼둔 동안 백업 (현재 **disabled**) |
 
-## 타겟
+## 당시 타겟
 
 | 항목 | 값 |
 |------|-----|
@@ -17,6 +19,8 @@ CGV 천호 **오디세이** `2026-08-11 19:30` 잔여석을 조회하고, **잔�
 | 극장 | CGV 천호 (`0199`) |
 | 일시 | 2026-08-11 19:30 |
 | 알림 | 잔여석 **증가** |
+
+다른 회차를 보려면 `config.json`(또는 `config.example.json`)의 극장·영화·일시만 바꾸면 됩니다.
 
 ## 요구 사항
 
@@ -37,17 +41,20 @@ python -u monitor.py --dry-run --once  # 조회만 (푸시 없음)
 python -u monitor.py --status-push     # 감시 시작 + 현재 잔여석 푸시
 ```
 
-## GitHub Actions (무료, 5분)
+## GitHub Actions
 
-1. 이 폴더를 **private** 레포로 푸시
-2. Repo → Settings → Secrets → Actions 에 추가:
-   - `NTFY_TOPIC` = ntfy 토픽명 (필수 권장)
-   - `NTFY_SERVER` = `https://ntfy.sh` (생략 가능, config 기본값 사용)
-3. Actions 탭에서 `CGV seat alert` 워크플로 확인
-4. **Run workflow**로 1회 테스트
+워크플로 파일: `.github/workflows/cgv-seat-alert.yml`  
+현재 레포에서는 **수동으로 Disable** 해 둔 상태입니다.
+
+다시 쓰려면:
+
+1. Repo → Settings → Secrets → Actions
+   - `NTFY_TOPIC` = ntfy 토픽명
+   - `NTFY_SERVER` = `https://ntfy.sh` (생략 가능)
+2. Actions 탭에서 `CGV seat alert` → **Enable workflow**
+3. **Run workflow**로 1회 테스트
 
 스케줄은 UTC `*/5`. 무료 플랜에선 수 분 지연될 수 있습니다.
-예매가 끝나면 Actions에서 워크플로를 Disable 하세요.
 
 ## 알림 모드
 
