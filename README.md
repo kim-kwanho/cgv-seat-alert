@@ -3,6 +3,25 @@
 CGV 잔여석을 주기적으로 조회하고, **잔여석이 늘어나면**(취소표) ntfy / Telegram으로 푸시합니다.  
 예매는 하지 않습니다. **감시할 상영(이벤트)은 사용자가 `config.json`(또는 환경변수)으로 직접 설정**합니다.
 
+Poll CGV remaining seats and get a push when seats **increase** (cancellations / dropouts)—via ntfy or Telegram. It never books tickets. You pick the screening yourself in `config.json` (or env vars); clone the repo, set your own private ntfy topic, and run locally or on GitHub Actions.
+
+## Screenshots
+
+이미지를 `docs/`에 넣은 뒤 아래 주석을 해제하세요.
+
+| File | Capture |
+|------|---------|
+| `docs/ntfy-alert.png` | ntfy 취소표/잔여 증가 알림 화면 |
+| `docs/cli-list.png` | `python monitor.py --list` 터미널 출력 |
+
+<!--
+<p align="center">
+  <img src="docs/ntfy-alert.png" alt="ntfy cancel-seat alert" width="360"/>
+  &nbsp;
+  <img src="docs/cli-list.png" alt="monitor.py --list showtimes" width="520"/>
+</p>
+-->
+
 ## 빠른 시작
 
 ```powershell
