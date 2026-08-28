@@ -88,10 +88,10 @@ def fetch_timetable_via_daiso(cfg: dict[str, Any]) -> list[dict[str, Any]]:
 def fetch_target(cfg: dict[str, Any]) -> dict[str, Any] | None:
     """특정 상영의 잔여석을 timetable에서 찾는다."""
     rows = fetch_timetable_via_daiso(cfg)
-    start = cfg["start_time"]
-    movie = cfg["movie_code"]
-    theater = cfg["theater_code"]
-    movie_name = cfg.get("movie_name", "")
+    start = str(cfg["start_time"]).strip()
+    movie = str(cfg.get("movie_code") or "").strip()
+    theater = str(cfg["theater_code"]).strip()
+    movie_name = str(cfg.get("movie_name") or "").strip()
 
     matches = [
         r
@@ -99,7 +99,7 @@ def fetch_target(cfg: dict[str, Any]) -> dict[str, Any] | None:
         if r.get("theaterCode") == theater
         and r.get("startTime") == start
         and (
-            r.get("movieCode") == movie
+            (movie and r.get("movieCode") == movie)
             or (movie_name and movie_name in str(r.get("movieName") or ""))
         )
     ]
@@ -148,8 +148,16 @@ def send_telegram(cfg: dict[str, Any], text: str) -> None:
 
 
 def apply_env_overrides(cfg: dict[str, Any]) -> dict[str, Any]:
-    """환경변수로 config 덮어쓰기 (GitHub Actions secrets용)."""
+    """환경변수로 config 덮어쓰기 (GitHub Actions secrets/vars용)."""
     mapping = {
+        "THEATER_CODE": "theater_code",
+        "THEATER_KEYWORD": "theater_keyword",
+        "THEATER_NAME": "theater_name",
+        "MOVIE_CODE": "movie_code",
+        "MOVIE_NAME": "movie_name",
+        "PLAY_DATE": "play_date",
+        "START_TIME": "start_time",
+        "BOOKING_URL": "booking_url",
         "NTFY_TOPIC": "ntfy_topic",
         "NTFY_SERVER": "ntfy_server",
         "TELEGRAM_BOT_TOKEN": "telegram_bot_token",
@@ -159,10 +167,92 @@ def apply_env_overrides(cfg: dict[str, Any]) -> dict[str, Any]:
         val = (os.environ.get(env_key) or "").strip()
         if val:
             cfg[cfg_key] = val
+
+    poll = (os.environ.get("POLL_INTERVAL_SEC") or "").strip()
+    if poll.isdigit():
+        cfg["poll_interval_sec"] = int(poll)
+
+    increase = (os.environ.get("ALERT_ON_INCREASE_ONLY") or "").strip().lower()
+    if increase in ("1", "true", "yes"):
+        cfg["alert_on_increase_only"] = True
+    elif increase in ("0", "false", "no"):
+        cfg["alert_on_increase_only"] = False
+
     source = (os.environ.get("ALERT_SOURCE") or "").strip()
     if source:
         cfg["alert_source"] = source
     return cfg
+
+
+REQUIRED_EVENT_KEYS = (
+    "theater_code",
+    "theater_keyword",
+    "play_date",
+    "start_time",
+)
+
+
+def validate_event_config(cfg: dict[str, Any]) -> None:
+    """감시할 상영(이벤트) 필수 값을 검사한다."""
+    missing = [k for k in REQUIRED_EVENT_KEYS if not str(cfg.get(k) or "").strip()]
+    if missing:
+        raise ValueError(
+            "이벤트 설정 부족: "
+            + ", ".join(missing)
+            + " - config.json을 수정하거나 환경변수로 넣으세요. "
+            "상영 목록은 `python monitor.py --list` 로 확인."
+        )
+    if not str(cfg.get("movie_code") or "").strip() and not str(cfg.get("movie_name") or "").strip():
+        raise ValueError(
+            "movie_code 또는 movie_name 중 하나는 필요합니다. "
+            "`python monitor.py --list` 로 코드를 확인하세요."
+        )
+    play_date = str(cfg["play_date"]).strip()
+    if len(play_date) != 8 or not play_date.isdigit():
+        raise ValueError(f"play_date는 YYYYMMDD 형식이어야 합니다: {play_date!r}")
+
+
+def list_showtimes(cfg: dict[str, Any]) -> int:
+    """극장·날짜 기준 상영 목록을 출력해 config 값을 고르게 한다."""
+    for key in ("theater_code", "theater_keyword", "play_date"):
+        if not str(cfg.get(key) or "").strip():
+            raise ValueError(f"--list 에 필요: {key}")
+    play_date = str(cfg["play_date"]).strip()
+    if len(play_date) != 8 or not play_date.isdigit():
+        raise ValueError(f"play_date는 YYYYMMDD 형식이어야 합니다: {play_date!r}")
+
+    rows = fetch_timetable_via_daiso(cfg)
+    theater = str(cfg["theater_code"])
+    filtered = [r for r in rows if r.get("theaterCode") == theater]
+    if not filtered:
+        filtered = rows
+
+    print(
+        f"[{now_kst()}] 상영 목록: {cfg.get('theater_name') or cfg.get('theater_keyword')} "
+        f"({theater}) / {play_date[:4]}-{play_date[4:6]}-{play_date[6:]}"
+    )
+    if not filtered:
+        print("  (결과 없음 - theater_code / theater_keyword / play_date 확인)")
+        return 1
+
+    print(
+        f"{'시작':<6}  {'잔여':>8}  {'movie_code':<12}  movie_name"
+    )
+    print("-" * 72)
+    for r in sorted(filtered, key=lambda x: (str(x.get("startTime") or ""), str(x.get("movieName") or ""))):
+        rem = r.get("remainingSeats")
+        total = r.get("totalSeats")
+        seats = f"{rem}/{total}"
+        print(
+            f"{str(r.get('startTime') or ''):<6}  {seats:>8}  "
+            f"{str(r.get('movieCode') or ''):<12}  {r.get('movieName') or ''}"
+        )
+    print("-" * 72)
+    print(
+        "위 값을 config.json 에 넣으세요:\n"
+        '  "movie_code", "movie_name", "start_time", "play_date", "theater_code"'
+    )
+    return 0
 
 
 def notify(
@@ -307,6 +397,11 @@ def once(cfg: dict[str, Any], state: dict[str, Any], *, force_status: bool = Fal
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="CGV 취소표(잔여석 증가) 감지 푸시")
     p.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    p.add_argument(
+        "--list",
+        action="store_true",
+        help="극장·날짜 상영 목록 출력 (이벤트 설정용)",
+    )
     p.add_argument("--once", action="store_true", help="한 번만 조회")
     p.add_argument("--test-push", action="store_true", help="테스트 푸시 후 종료")
     p.add_argument("--status-push", action="store_true", help="시작 시 현재 잔여석 푸시")
@@ -347,11 +442,26 @@ def main() -> int:
     if args.dry_run:
         cfg["_dry_run"] = True
 
+    if args.list:
+        try:
+            return list_showtimes(cfg)
+        except Exception as e:  # noqa: BLE001
+            print(f"[{now_kst()}] 목록 조회 실패: {e}", file=sys.stderr)
+            return 1
+
+    try:
+        validate_event_config(cfg)
+    except ValueError as e:
+        print(f"[{now_kst()}] 설정 오류: {e}", file=sys.stderr)
+        return 2
+
     if args.test_push:
         notify(
             cfg,
             "테스트 알림",
-            f"{cfg['movie_name']} / {cfg['theater_name']} {cfg['start_time']}\n설정 OK",
+            f"{cfg.get('movie_name') or cfg.get('movie_code')} / "
+            f"{cfg.get('theater_name') or cfg.get('theater_keyword')} "
+            f"{cfg['start_time']}\n설정 OK",
         )
         return 0
 
@@ -362,11 +472,14 @@ def main() -> int:
         except json.JSONDecodeError:
             state = {}
 
+    label = cfg.get("movie_name") or cfg.get("movie_code")
+    theater = cfg.get("theater_name") or cfg.get("theater_keyword")
     print(
-        f"[{now_kst()}] 감시 시작: {cfg['movie_name']} | {cfg['theater_name']} | "
+        f"[{now_kst()}] 감시 시작: {label} | {theater} | "
         f"{cfg['play_date']} {cfg['start_time']} | 간격 {cfg['poll_interval_sec']}s"
     )
-    print(f"[{now_kst()}] ntfy 토픽: {cfg.get('ntfy_topic')} @ {cfg.get('ntfy_server')}")
+    topic = cfg.get("ntfy_topic") or "(미설정)"
+    print(f"[{now_kst()}] ntfy 토픽: {topic} @ {cfg.get('ntfy_server')}")
     mode = "잔여석 증가(취소표)" if cfg.get("alert_on_increase_only", True) else "잔여>0"
     if cfg.get("_dry_run"):
         mode = f"{mode} + dry-run"

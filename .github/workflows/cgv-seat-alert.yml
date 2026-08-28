@@ -2,7 +2,7 @@ name: CGV seat alert
 
 on:
   schedule:
-    # UTC 기준. KST = UTC+9 → 매 5분
+    # UTC. KST = UTC+9 → 매 5분
     - cron: "*/5 * * * *"
   workflow_dispatch:
 
@@ -48,10 +48,19 @@ jobs:
 
       - name: Check remaining seats once
         env:
+          # 알림 (Secrets)
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           NTFY_SERVER: ${{ secrets.NTFY_SERVER }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          # 감시할 상영 — Repo Variables 권장 (Settings → Variables)
+          THEATER_CODE: ${{ vars.THEATER_CODE }}
+          THEATER_KEYWORD: ${{ vars.THEATER_KEYWORD }}
+          THEATER_NAME: ${{ vars.THEATER_NAME }}
+          MOVIE_CODE: ${{ vars.MOVIE_CODE }}
+          MOVIE_NAME: ${{ vars.MOVIE_NAME }}
+          PLAY_DATE: ${{ vars.PLAY_DATE }}
+          START_TIME: ${{ vars.START_TIME }}
           ALERT_SOURCE: Actions
         run: python monitor.py --once
 
