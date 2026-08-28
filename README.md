@@ -136,16 +136,6 @@ python -u monitor.py --status-push      # 감시 시작 + 현재 잔여 푸시
 - `config.json`, `state.json` 은 gitignore 대상입니다. 템플릿만 `config.example.json`에 둡니다.
 - 과도한 폴링은 자제하세요. 개인·비상업 용도를 전제로 합니다.
 
-## 공개 전 체크리스트
-
-레포를 Public으로 바꾸기 전에:
-
-- [ ] `config.json` / `state.json` 이 커밋·푸시되지 않았는지 확인
-- [ ] `ntfy_topic` 이 예시/추측 가능한 이름이 아닌지 확인 (과거 토픽을 썼다면 **새 토픽으로 교체**)
-- [ ] Telegram 토큰·채팅 ID는 Secrets만 사용
-- [ ] Actions Variables에 넣을 상영 정보가 “공개돼도 괜찮은지” 판단 (영화·극장·일시)
-- [ ] 워크플로를 당장 쓰지 않으면 Actions에서 Disable
-
 ## License
 
 MIT
